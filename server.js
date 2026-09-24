@@ -40,6 +40,13 @@ function broadcastState() {
   io.emit('state:update', publicState());
 }
 
+// Tells every connected /join page to forget any number it cached in
+// localStorage, since the server just wiped its participant list and that
+// old number no longer corresponds to anything.
+function broadcastReset() {
+  io.emit('game:reset');
+}
+
 // ---------------------------------------------------------------------------
 // Public state (used by /display and /join to render live info)
 // ---------------------------------------------------------------------------
@@ -147,6 +154,7 @@ app.post('/api/admin/numbers', (req, res) => {
   state.isOpen = false;
 
   broadcastState();
+  broadcastReset();
   res.json(publicState());
 });
 
@@ -172,6 +180,7 @@ app.post('/api/admin/reset', (req, res) => {
   });
   state.isOpen = false;
   broadcastState();
+  broadcastReset();
   res.json(publicState());
 });
 

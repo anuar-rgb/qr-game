@@ -182,6 +182,17 @@
 
     const socket = io();
     socket.on('state:update', render);
+    socket.on('connect', () => {
+      // Pull the latest state immediately on (re)connect, in case any
+      // updates were broadcast while this tab was disconnected.
+      fetch('/api/admin/state').then((r) => r.json()).then(render);
+    });
+
+    // Safety net: if the websocket ever silently drops on this device/network,
+    // the table still stays current via a periodic poll.
+    setInterval(() => {
+      fetch('/api/admin/state').then((r) => r.json()).then(render).catch(() => {});
+    }, 3000);
   </script>
 </body>
 </html>

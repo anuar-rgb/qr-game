@@ -146,6 +146,22 @@
         show(state.isOpen ? 'ready' : 'closed');
       }
     });
+
+    // Admin reset (or reconfigured numbers) on the server -> this phone's
+    // cached number is no longer valid, forget it so the participant can
+    // get a fresh one for the new round.
+    socket.on('game:reset', async () => {
+      localStorage.removeItem(STORAGE_NUMBER_KEY);
+      btn.disabled = false;
+      readyError.classList.add('hidden');
+      try {
+        const res = await fetch('/api/state');
+        const state = await res.json();
+        show(state.isOpen ? 'ready' : 'closed');
+      } catch (err) {
+        show('closed');
+      }
+    });
   </script>
 </body>
 </html>
