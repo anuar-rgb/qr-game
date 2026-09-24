@@ -134,14 +134,20 @@ app.post('/api/admin/numbers', (req, res) => {
     return res.status(400).json({ error: 'Нужен непустой список номеров' });
   }
 
+  const seen = new Set();
   for (const n of numbers) {
     const limit = Number(n.maxLimit);
-    if (n.number === undefined || n.number === null || String(n.number).trim() === '') {
+    const label = n.number === undefined || n.number === null ? '' : String(n.number).trim();
+    if (label === '') {
       return res.status(400).json({ error: 'У каждого номера должно быть значение' });
     }
     if (!Number.isFinite(limit) || limit <= 0) {
       return res.status(400).json({ error: 'Лимит должен быть положительным числом' });
     }
+    if (seen.has(label)) {
+      return res.status(400).json({ error: `Номер "${label}" повторяется — каждый номер должен быть уникальным` });
+    }
+    seen.add(label);
   }
 
   state.numbers = numbers.map((n) => ({
