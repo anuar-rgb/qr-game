@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Получить номер</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="min-h-screen bg-slate-900 text-white flex items-center justify-center p-6">
+
+  <div class="w-full max-w-sm text-center">
+
+    <div id="view-loading" class="hidden">
+      <p class="text-slate-400">Загрузка...</p>
+    </div>
+
+    <div id="view-closed" class="hidden bg-slate-800 rounded-3xl p-8 shadow-xl">
+      <p class="text-2xl font-bold text-rose-400 mb-2">Регистрация ещё не открыта</p>
+      <p class="text-slate-400">Дождитесь начала игры и обновите страницу.</p>
+    </div>
+
+    <div id="view-ready" class="hidden bg-slate-800 rounded-3xl p-8 shadow-xl">
+      <p class="text-slate-300 mb-6">Нажмите кнопку, чтобы получить свой номер</p>
+      <button id="btn-get-number"
+        class="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 transition text-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+        Получить номер
+      </button>
+      <p id="ready-error" class="text-rose-400 mt-4 hidden"></p>
+    </div>
+
+    <div id="view-full" class="hidden bg-slate-800 rounded-3xl p-8 shadow-xl">
+      <p class="text-2xl font-bold text-rose-400">Все места заняты</p>
+      <p class="text-slate-400 mt-2">К сожалению, свободных номеров не осталось.</p>
+    </div>
+
+    <div id="view-assigned" class="hidden bg-slate-800 rounded-3xl p-10 shadow-xl">
+      <p class="text-slate-300 mb-3">Ваш номер</p>
+      <p id="my-number" class="text-8xl font-black text-emerald-400 leading-none"></p>
+    </div>
+
+  </div>
+
+  <script>
+    const STORAGE_ID_KEY = 'qrgame_participant_id';
+    const STORAGE_NUMBER_KEY = 'qrgame_my_number';
+
+    function uuid() {
+      if (crypto.randomUUID) return crypto.randomUUID();
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+    }
+
+    function getParticipantId() {
+      let id = localStorage.getItem(STORAGE_ID_KEY);
+      if (!id) {
+        id = uuid();
+        localStorage.setItem(STORAGE_ID_KEY, id);
+      }
+      return id;
+    }
+
+    const views = {
+      loading: document.getElementById('view-loading'),
+      closed: document.getElementById('view-closed'),
+      ready: document.getElementById('view-ready'),
+      full: document.getElementById('view-full'),
+      assigned: document.getElementById('view-assigned'),
+    };
+
+    function show(name) {
+      Object.values(views).forEach((el) => el.classList.add('hidden'));
+      views[name].classList.remove('hidden');
+    }
+
+    function showAssignedNumber(number) {
+      document.getElementById('my-number').textContent = number;
+      show('assigned');
+    }
+
+    const participantId = getParticipantId();
+    const btn = document.getElementById('btn-get-number');
+    const readyError = document.getElementById('ready-error');
+
+    async function requestNumber() {
+      btn.disabled = true;
+      readyError.classList.add('hidden');
+      try {
+        const res = await fetch('/api/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ participantId }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (res.status === 409) {
+            show('full');
+          } else if (res.status === 403) {
+            show('closed');
+          } else {
+            readyError.textContent = data.error || 'Ошибка. Попробуйте ещё раз.';
+            readyError.classList.remove('hidden');
+            btn.disabled = false;
+          }
+          return;
+        }
+        localStorage.setItem(STORAGE_NUMBER_KEY, String(data.number));
+        showAssignedNumber(data.number);
+      } catch (err) {
+        readyError.textContent = 'Нет соединения с сервером.';
+        readyError.classList.remove('hidden');
+        btn.disabled = false;
+      }
+    }
+
+    btn.addEventListener('click', requestNumber);
+
+    async function init() {
+      // Already have a number saved locally -> just show it, no network needed.
+      const savedNumber = localStorage.getItem(STORAGE_NUMBER_KEY);
+      if (savedNumber) {
+        showAssignedNumber(savedNumber);
+        return;
+      }
+
+      show('loading');
+      try {
+        const res = await fetch('/api/state');
+        const state = await res.json();
+        show(state.isOpen ? 'ready' : 'closed');
+      } catch (err) {
+        show('closed');
+      }
+    }
+
+    init();
+
+    const socket = io();
+    socket.on('state:update', (state) => {
+      // Only react live if the participant hasn't got a number yet.
+      if (localStorage.getItem(STORAGE_NUMBER_KEY)) return;
+      if (views.ready.classList.contains('hidden') === false || views.closed.classList.contains('hidden') === false) {
+        show(state.isOpen ? 'ready' : 'closed');
+      }
+    });
+  </script>
+</body>
+</html>

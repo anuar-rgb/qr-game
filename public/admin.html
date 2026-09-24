@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Админка — управление игрой</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800 p-6">
+
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <header class="flex items-center justify-between">
+      <h1 class="text-3xl font-bold">Панель управления игрой</h1>
+      <span id="status-badge" class="px-4 py-1.5 rounded-full text-sm font-semibold bg-slate-300 text-slate-700">—</span>
+    </header>
+
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">1. Номера / команды</h2>
+      <div id="rows" class="space-y-2 mb-4"></div>
+      <button id="btn-add-row" type="button"
+        class="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm font-medium">
+        + Добавить номер
+      </button>
+      <div class="mt-4 flex items-center gap-3">
+        <button id="btn-save-numbers" type="button"
+          class="px-5 py-2.5 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700">
+          Сохранить настройки
+        </button>
+        <span id="save-msg" class="text-sm"></span>
+      </div>
+      <p class="text-xs text-slate-400 mt-2">Сохранение настроек сбрасывает текущих участников.</p>
+    </section>
+
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">2. Управление игрой</h2>
+      <div class="flex flex-wrap gap-3">
+        <button id="btn-start" type="button"
+          class="px-5 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed">
+          Запустить игру
+        </button>
+        <button id="btn-stop" type="button"
+          class="px-5 py-2.5 rounded-lg bg-amber-500 text-white font-semibold hover:bg-amber-400">
+          Остановить регистрацию
+        </button>
+        <button id="btn-reset" type="button"
+          class="px-5 py-2.5 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-500">
+          Сбросить все данные
+        </button>
+      </div>
+    </section>
+
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">3. Текущее состояние</h2>
+      <p class="mb-3 text-slate-600">
+        Всего: <span id="summary" class="font-semibold">0 / 0</span>
+      </p>
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-500 border-b">
+            <th class="py-2">Номер</th>
+            <th class="py-2">Занято</th>
+            <th class="py-2">Лимит</th>
+            <th class="py-2">Свободно</th>
+          </tr>
+        </thead>
+        <tbody id="state-table"></tbody>
+      </table>
+    </section>
+
+  </div>
+
+  <script>
+    const rowsEl = document.getElementById('rows');
+    const saveMsg = document.getElementById('save-msg');
+    const statusBadge = document.getElementById('status-badge');
+    const btnStart = document.getElementById('btn-start');
+    const summaryEl = document.getElementById('summary');
+    const stateTable = document.getElementById('state-table');
+
+    function addRow(number = '', maxLimit = '') {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2';
+      row.innerHTML = `
+        <input type="text" placeholder="Номер (напр. 1)" value="${number}"
+          class="row-number flex-1 border border-slate-300 rounded-lg px-3 py-2" />
+        <input type="number" min="1" placeholder="Макс. участников" value="${maxLimit}"
+          class="row-limit w-40 border border-slate-300 rounded-lg px-3 py-2" />
+        <button type="button" class="btn-remove text-rose-500 hover:text-rose-700 px-2" title="Удалить">✕</button>
+      `;
+      row.querySelector('.btn-remove').addEventListener('click', () => row.remove());
+      rowsEl.appendChild(row);
+    }
+
+    document.getElementById('btn-add-row').addEventListener('click', () => addRow());
+
+    function collectRows() {
+      return [...rowsEl.querySelectorAll('.flex.items-center.gap-2')].map((row) => ({
+        number: row.querySelector('.row-number').value.trim(),
+        maxLimit: row.querySelector('.row-limit').value,
+      })).filter((r) => r.number !== '' && r.maxLimit !== '');
+    }
+
+    async function postJson(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Ошибка запроса');
+      return data;
+    }
+
+    document.getElementById('btn-save-numbers').addEventListener('click', async () => {
+      const numbers = collectRows();
+      if (numbers.length === 0) {
+        saveMsg.textContent = 'Добавьте хотя бы один номер с лимитом.';
+        saveMsg.className = 'text-sm text-rose-600';
+        return;
+      }
+      try {
+        await postJson('/api/admin/numbers', { numbers });
+        saveMsg.textContent = 'Сохранено!';
+        saveMsg.className = 'text-sm text-emerald-600';
+      } catch (err) {
+        saveMsg.textContent = err.message;
+        saveMsg.className = 'text-sm text-rose-600';
+      }
+    });
+
+    btnStart.addEventListener('click', async () => {
+      try {
+        await postJson('/api/admin/start');
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    document.getElementById('btn-stop').addEventListener('click', async () => {
+      await postJson('/api/admin/stop');
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', async () => {
+      if (!confirm('Сбросить всех участников и начать заново?')) return;
+      await postJson('/api/admin/reset');
+    });
+
+    function render(state) {
+      statusBadge.textContent = state.isOpen ? 'Регистрация открыта' : 'Регистрация закрыта';
+      statusBadge.className = 'px-4 py-1.5 rounded-full text-sm font-semibold ' +
+        (state.isOpen ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-300 text-slate-700');
+      btnStart.disabled = state.isOpen;
+
+      summaryEl.textContent = `${state.totalAssigned} / ${state.totalCapacity}`;
+
+      stateTable.innerHTML = '';
+      state.numbers.forEach((n) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b last:border-0';
+        tr.innerHTML = `
+          <td class="py-2 font-medium">№ ${n.number}</td>
+          <td class="py-2">${n.currentCount}</td>
+          <td class="py-2">${n.maxLimit}</td>
+          <td class="py-2">${Math.max(0, n.maxLimit - n.currentCount)}</td>
+        `;
+        stateTable.appendChild(tr);
+      });
+
+      // Keep the config form in sync with server state when it's empty
+      // (first load) so the admin sees what's already configured.
+      if (rowsEl.children.length === 0 && state.numbers.length > 0) {
+        state.numbers.forEach((n) => addRow(n.number, n.maxLimit));
+      }
+    }
+
+    fetch('/api/admin/state').then((r) => r.json()).then((state) => {
+      render(state);
+      if (rowsEl.children.length === 0) addRow();
+    });
+
+    const socket = io();
+    socket.on('state:update', render);
+  </script>
+</body>
+</html>

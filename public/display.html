@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Присоединяйтесь к игре</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  body { background: radial-gradient(circle at top, #1e293b, #0f172a); }
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center text-white p-6">
+
+  <div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+
+    <div class="flex flex-col items-center bg-white rounded-3xl shadow-2xl p-8">
+      <h1 class="text-slate-800 text-2xl font-bold mb-4 text-center">Отсканируйте QR-код</h1>
+      <img id="qr" src="/api/qr.png" alt="QR-код для регистрации" class="w-72 h-72 md:w-80 md:h-80" />
+      <p id="join-url" class="text-slate-500 text-sm mt-4 break-all text-center"></p>
+      <p id="status-line" class="mt-4 text-base font-semibold"></p>
+    </div>
+
+    <div class="flex flex-col gap-6">
+      <div class="bg-slate-800/70 rounded-3xl p-8 shadow-xl">
+        <p class="text-slate-300 uppercase tracking-widest text-sm mb-2">Заполнено номеров</p>
+        <p class="text-6xl font-black" id="summary-count">0 / 0</p>
+        <div class="w-full h-3 bg-slate-700 rounded-full mt-4 overflow-hidden">
+          <div id="summary-bar" class="h-full bg-emerald-400 transition-all duration-500" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div id="numbers-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+    </div>
+
+  </div>
+
+  <script>
+    document.getElementById('join-url').textContent = `${location.origin}/join`;
+
+    const summaryCount = document.getElementById('summary-count');
+    const summaryBar = document.getElementById('summary-bar');
+    const grid = document.getElementById('numbers-grid');
+    const statusLine = document.getElementById('status-line');
+
+    function render(state) {
+      const total = state.totalCapacity || 0;
+      const assigned = state.totalAssigned || 0;
+      summaryCount.textContent = `${assigned} / ${total}`;
+      summaryBar.style.width = total > 0 ? `${Math.min(100, (assigned / total) * 100)}%` : '0%';
+
+      statusLine.textContent = state.isOpen
+        ? 'Регистрация открыта — сканируйте QR!'
+        : 'Регистрация пока закрыта';
+      statusLine.className = 'mt-4 text-base font-semibold ' + (state.isOpen ? 'text-emerald-600' : 'text-rose-500');
+
+      grid.innerHTML = '';
+      state.numbers.forEach((n) => {
+        const pct = n.maxLimit > 0 ? Math.min(100, (n.currentCount / n.maxLimit) * 100) : 0;
+        const full = n.currentCount >= n.maxLimit;
+        const card = document.createElement('div');
+        card.className = 'bg-slate-800/70 rounded-2xl p-4 shadow-lg';
+        card.innerHTML = `
+          <p class="text-lg font-bold mb-1">№ ${n.number}</p>
+          <p class="text-sm text-slate-300 mb-2">${n.currentCount} / ${n.maxLimit}</p>
+          <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div class="h-full ${full ? 'bg-rose-400' : 'bg-sky-400'}" style="width:${pct}%"></div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    fetch('/api/state').then((r) => r.json()).then(render);
+
+    const socket = io();
+    socket.on('state:update', render);
+  </script>
+</body>
+</html>
