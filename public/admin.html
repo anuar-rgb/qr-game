@@ -79,6 +79,11 @@
     const summaryEl = document.getElementById('summary');
     const stateTable = document.getElementById('state-table');
 
+    function clearSaveMsg() {
+      saveMsg.textContent = '';
+      saveMsg.className = 'text-sm';
+    }
+
     function addRow(number = '', maxLimit = '') {
       const row = document.createElement('div');
       row.className = 'flex items-center gap-2';
@@ -89,11 +94,21 @@
           class="row-limit w-40 border border-slate-300 rounded-lg px-3 py-2" />
         <button type="button" class="btn-remove text-rose-500 hover:text-rose-700 px-2" title="Удалить">✕</button>
       `;
-      row.querySelector('.btn-remove').addEventListener('click', () => row.remove());
+      row.querySelector('.btn-remove').addEventListener('click', () => {
+        row.remove();
+        clearSaveMsg();
+      });
       rowsEl.appendChild(row);
     }
 
-    document.getElementById('btn-add-row').addEventListener('click', () => addRow());
+    document.getElementById('btn-add-row').addEventListener('click', () => {
+      addRow();
+      clearSaveMsg();
+    });
+
+    // Any manual edit to a row's number/limit invalidates the "Сохранено!"
+    // badge — it should only ever reflect the last actual save action.
+    rowsEl.addEventListener('input', clearSaveMsg);
 
     function collectRows() {
       return [...rowsEl.querySelectorAll('.flex.items-center.gap-2')].map((row) => ({
