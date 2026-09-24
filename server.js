@@ -92,7 +92,20 @@ app.post('/api/join', (req, res) => {
     return res.status(409).json({ error: 'Все места заняты' });
   }
 
-  const chosen = available[Math.floor(Math.random() * available.length)];
+  // Weighted by remaining free slots, not uniform per number label — a
+  // number with 10 free slots is 5x more likely to be picked than one with
+  // 2, matching how a raffle with differently-sized buckets fills up.
+  const totalRemaining = available.reduce((sum, n) => sum + (n.maxLimit - n.currentCount), 0);
+  let roll = Math.floor(Math.random() * totalRemaining);
+  let chosen = available[available.length - 1];
+  for (const n of available) {
+    const remaining = n.maxLimit - n.currentCount;
+    if (roll < remaining) {
+      chosen = n;
+      break;
+    }
+    roll -= remaining;
+  }
   chosen.currentCount += 1;
   const record = { numberId: chosen.id, number: chosen.number, assignedAt: Date.now() };
   state.participants.set(participantId, record);
