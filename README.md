@@ -2,6 +2,8 @@
 
 A small real-time app for live events: the organizer shows one QR code on a big screen, everyone scans it with their phone and instantly gets a random number (team, table, turn order), while the screen shows how many places are filled.
 
+**Live:** https://qr-game-production-52a3.up.railway.app/display
+
 <p>
   <img src="docs/screenshots/display.jpg" alt="Big-screen display with QR code" width="62%">
   <img src="docs/screenshots/join.jpg" alt="Participant's phone" width="30%">
